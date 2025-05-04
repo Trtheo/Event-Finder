@@ -1,0 +1,49 @@
+{
+  "project_info": {
+    "project_number": "1036687973946",
+    "firebase_url": "https://event-finder-fabd7-default-rtdb.firebaseio.com",
+    "project_id": "event-finder-fabd7",
+    "storage_bucket": "event-finder-fabd7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1036687973946:android:16dfda275ace7b527f5f03",
+        "android_client_info": {
+          "package_name": "com.example.event_finder_fixed"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCYHM-jOB0dZXPxLdH5Q0-5Xed9mfxXufc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1036687973946:android:3158e0ad21c9780a7f5f03",
+        "android_client_info": {
+          "package_name": "com.theo.eventfinder"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCYHM-jOB0dZXPxLdH5Q0-5Xed9mfxXufc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
