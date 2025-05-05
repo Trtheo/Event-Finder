@@ -6,6 +6,8 @@ import 'screens/main_navigation.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'theme/theme_notifier.dart';
+import 'package:event_finder_fixed/screens/auth/reset_password_screen.dart';
+import 'screens/events/my_created_events_screen.dart';
 
 class EventFinderApp extends StatelessWidget {
   const EventFinderApp({super.key});
@@ -23,10 +25,9 @@ class EventFinderApp extends StatelessWidget {
               primarySwatch: Colors.deepPurple,
               useMaterial3: true,
             ),
-            darkTheme: ThemeData.dark().copyWith(
-              useMaterial3: true,
-            ),
-            themeMode: themeNotifier.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+            darkTheme: ThemeData.dark().copyWith(useMaterial3: true),
+            themeMode:
+                themeNotifier.isDarkMode ? ThemeMode.dark : ThemeMode.light,
             // ✅ Secure user login check
             home: StreamBuilder<User?>(
               stream: FirebaseAuth.instance.authStateChanges(),
@@ -44,6 +45,8 @@ class EventFinderApp extends StatelessWidget {
               '/login': (context) => const LoginScreen(),
               '/register': (context) => const RegisterScreen(),
               '/main': (context) => const MainNavigation(),
+              '/reset-password': (context) => const ResetPasswordScreen(),
+              '/my-events': (context) => const MyCreatedEventsScreen(),
             },
           );
         },

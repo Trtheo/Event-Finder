@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -44,15 +45,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
     final eventId = widget.event['id'] ?? widget.event['title'];
 
-    final savedRef = FirebaseFirestore.instance
+    await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
         .collection('saved_events')
-        .doc(eventId);
+        .doc(eventId)
+        .set(widget.event);
 
-    await savedRef.set(widget.event);
     setState(() => _isSaved = true);
-
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Event saved!")),
     );
@@ -72,7 +72,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         .delete();
 
     setState(() => _isSaved = false);
-
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Bookmark removed.")),
     );
@@ -100,25 +99,30 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         ? DateFormat('EEE, MMM d • h:mm a').format(date)
         : 'Date TBD';
 
+    final imageBase64 = widget.event['imageBase64'];
+    final imageWidget = imageBase64 != null
+        ? Image.memory(
+            base64Decode(imageBase64),
+            width: double.infinity,
+            height: 220,
+            fit: BoxFit.cover,
+          )
+        : Container(
+            height: 220,
+            color: Colors.grey[200],
+            child: const Center(child: Text("No Image")),
+          );
+
+    final now = DateTime.now();
+    final isOngoing = date != null && now.isBefore(date);
+
     return Scaffold(
       appBar: AppBar(title: Text(widget.event['title'] ?? 'Event Details')),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (widget.event['imageUrl'] != null)
-              ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(24),
-                  bottomRight: Radius.circular(24),
-                ),
-                child: Image.network(
-                  widget.event['imageUrl'],
-                  width: double.infinity,
-                  height: 220,
-                  fit: BoxFit.cover,
-                ),
-              ),
+            imageWidget,
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -129,6 +133,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 8),
+                  Text(
+                    isOngoing ? "🟢 Ongoing" : "🔴 Ended",
+                    style: TextStyle(
+                      color: isOngoing ? Colors.green : Colors.red,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       const Icon(Icons.place, size: 20),
@@ -142,6 +154,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       const Icon(Icons.calendar_month, size: 20),
                       const SizedBox(width: 6),
                       Text(formattedDate),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.person, size: 20),
+                      const SizedBox(width: 6),
+                      Text("Organized by: ${widget.event['organizerName'] ?? 'Unknown'}"),
                     ],
                   ),
                   const SizedBox(height: 16),

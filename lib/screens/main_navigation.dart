@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'home/event_list_screen.dart';
 import 'home/saved_events_screen.dart';
@@ -20,9 +21,6 @@ class _MainNavigationState extends State<MainNavigation>
   int _index = 0;
   final PageStorageBucket _bucket = PageStorageBucket();
 
-  @override
-  bool get wantKeepAlive => true;
-
   final List<Widget> _screens = const [
     EventListScreen(),
     SavedEventsScreen(),
@@ -31,8 +29,14 @@ class _MainNavigationState extends State<MainNavigation>
   ];
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   void initState() {
     super.initState();
+    _loadLastTab();
+
+    // Redirect to login if not authenticated
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       Future.microtask(() {
@@ -41,7 +45,17 @@ class _MainNavigationState extends State<MainNavigation>
     }
   }
 
-  void _handleTabChange(int index) async {
+  Future<void> _loadLastTab() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _index = prefs.getInt('lastTabIndex') ?? 0;
+    });
+  }
+
+  Future<void> _handleTabChange(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('lastTabIndex', index);
+
     final user = FirebaseAuth.instance.currentUser;
     if (index == 2 && user != null) {
       // When notifications tab is tapped → mark all as read
@@ -56,6 +70,7 @@ class _MainNavigationState extends State<MainNavigation>
         doc.reference.update({'read': true});
       }
     }
+
     setState(() => _index = index);
   }
 

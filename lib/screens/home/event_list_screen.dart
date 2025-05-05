@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'event_detail_screen.dart';
@@ -150,14 +151,15 @@ class _EventListScreenState extends State<EventListScreen> {
                       ),
 
                       child: ListTile(
-                        leading: Image.network(
-                          data['imageUrl'] ?? '',
-                          width: 60,
-                          fit: BoxFit.cover,
-                          errorBuilder:
-                              (_, __, ___) =>
-                                  const Icon(Icons.image_not_supported),
-                        ),
+                        leading:
+                            data['imageBase64'] != null
+                                ? Image.memory(
+                                  base64Decode(data['imageBase64']),
+                                  width: 60,
+                                  fit: BoxFit.cover,
+                                )
+                                : const Icon(Icons.image_not_supported),
+
                         title: Text(data['title'] ?? ''),
                         subtitle: Text(data['location'] ?? ''),
 

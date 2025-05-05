@@ -5,6 +5,7 @@ import 'app.dart';
 import 'package:provider/provider.dart';
 import 'theme/theme_notifier.dart';
 
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
