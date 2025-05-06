@@ -8,7 +8,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 class CreateEventScreen extends StatefulWidget {
-  const CreateEventScreen({super.key});
+  final Map<String, dynamic>? eventToEdit; // 🆕 support editing
+
+  const CreateEventScreen({super.key, this.eventToEdit});
 
   @override
   State<CreateEventScreen> createState() => _CreateEventScreenState();
@@ -23,6 +25,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   DateTime? _selectedDate;
   File? _pickedImage;
   bool _isLoading = false;
+  String? _imageUrl; // 🆕 for edit
 
   final List<String> _categories = [
     'Tech',
@@ -40,6 +43,20 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   ];
   String _selectedCategory = 'Tech';
 
+  @override
+  void initState() {
+    super.initState();
+    if (widget.eventToEdit != null) {
+      final data = widget.eventToEdit!;
+      _titleController.text = data['title'] ?? '';
+      _descController.text = data['description'] ?? '';
+      _locationController.text = data['location'] ?? '';
+      _selectedCategory = data['category'] ?? 'Tech';
+      _imageUrl = data['imageUrl'];
+      _selectedDate = data['date']?.toDate();
+    }
+  }
+
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
@@ -55,7 +72,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     final now = DateTime.now();
     final date = await showDatePicker(
       context: context,
-      initialDate: now,
+      initialDate: _selectedDate ?? now,
       firstDate: now,
       lastDate: now.add(const Duration(days: 365)),
     );
@@ -63,7 +80,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
     final time = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.fromDateTime(now),
+      initialTime: TimeOfDay.fromDateTime(_selectedDate ?? now),
     );
     if (time == null) return;
 
@@ -78,7 +95,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     });
   }
 
-  Future<String?> uploadImageToCloudinary(File imageFile) async {
+  Future<String?> _uploadToCloudinary(File imageFile) async {
     final uri = Uri.parse(
       "https://api.cloudinary.com/v1_1/trtheo/image/upload",
     );
@@ -90,28 +107,21 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           );
 
     final response = await request.send();
-    final responseData = await response.stream.bytesToString();
+    final body = await response.stream.bytesToString();
 
     if (response.statusCode == 200) {
-      final json = jsonDecode(responseData);
-      return json['secure_url'];
+      return jsonDecode(body)['secure_url'];
     } else {
-      print('Upload failed: $responseData');
+      print("Cloudinary upload failed: $body");
       return null;
     }
   }
 
   Future<void> _submitEvent() async {
-    if (!_formKey.currentState!.validate() ||
-        _pickedImage == null ||
-        _selectedDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'All fields including image, date & category are required.',
-          ),
-        ),
-      );
+    if (!_formKey.currentState!.validate() || _selectedDate == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Fill all required fields")));
       return;
     }
 
@@ -119,16 +129,21 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
     try {
       final user = FirebaseAuth.instance.currentUser!;
-      final eventId = FirebaseFirestore.instance.collection('events').doc().id;
+      final isEditing = widget.eventToEdit != null;
+      final docId =
+          isEditing
+              ? widget.eventToEdit!['id']
+              : FirebaseFirestore.instance.collection('events').doc().id;
 
-      // Upload to Cloudinary
-      final imageUrl = await uploadImageToCloudinary(_pickedImage!);
-      if (imageUrl == null) {
-        throw Exception("Image upload failed.");
+      String? imageUrl = _imageUrl;
+
+      if (_pickedImage != null) {
+        imageUrl = await _uploadToCloudinary(_pickedImage!);
+        if (imageUrl == null) throw Exception("Image upload failed");
       }
 
       final eventData = {
-        'id': eventId,
+        'id': docId,
         'title': _titleController.text.trim(),
         'description': _descController.text.trim(),
         'location': _locationController.text.trim(),
@@ -142,19 +157,21 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
       await FirebaseFirestore.instance
           .collection('events')
-          .doc(eventId)
+          .doc(docId)
           .set(eventData);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Event created successfully.")),
+        SnackBar(
+          content: Text(isEditing ? "✅ Event updated." : "🎉 Event created."),
+        ),
       );
       Navigator.pop(context);
     } catch (e) {
-      print('🔥 Error uploading event: $e');
+      print("🔥 Submission error: $e");
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text("❌ Error: $e")));
+      ).showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -165,7 +182,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Event')),
+      appBar: AppBar(
+        title: Text(widget.eventToEdit != null ? "Edit Event" : "Create Event"),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -177,9 +196,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 child: CircleAvatar(
                   radius: 50,
                   backgroundImage:
-                      _pickedImage != null ? FileImage(_pickedImage!) : null,
+                      _pickedImage != null
+                          ? FileImage(_pickedImage!)
+                          : (_imageUrl != null
+                                  ? NetworkImage(_imageUrl!)
+                                  : null)
+                              as ImageProvider?,
                   child:
-                      _pickedImage == null
+                      _pickedImage == null && _imageUrl == null
                           ? const Icon(
                             Icons.add_photo_alternate_outlined,
                             size: 30,
@@ -241,7 +265,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   ? const CircularProgressIndicator()
                   : ElevatedButton.icon(
                     icon: const Icon(Icons.check),
-                    label: const Text("Submit Event"),
+                    label: Text(
+                      widget.eventToEdit != null
+                          ? "Update Event"
+                          : "Submit Event",
+                    ),
                     style: ElevatedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 48),
                       backgroundColor: theme.primaryColor,
