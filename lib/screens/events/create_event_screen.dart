@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
@@ -24,9 +24,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   File? _pickedImage;
   bool _isLoading = false;
 
-  // 👇 Categories (reusing from EventListScreen)
   final List<String> _categories = [
-    'All',
     'Tech',
     'Music',
     'Food',
@@ -35,12 +33,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     'Art',
     'Health',
     'Party',
-    'BirthDay',
+    'Birthday',
     'Ceremony',
     'Wedding',
     'Festival',
   ];
-  String _selectedCategory = 'All';
+  String _selectedCategory = 'Tech';
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
@@ -80,6 +78,29 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     });
   }
 
+  Future<String?> uploadImageToCloudinary(File imageFile) async {
+    final uri = Uri.parse(
+      "https://api.cloudinary.com/v1_1/trtheo/image/upload",
+    );
+    final request =
+        http.MultipartRequest('POST', uri)
+          ..fields['upload_preset'] = 'event_upload'
+          ..files.add(
+            await http.MultipartFile.fromPath('file', imageFile.path),
+          );
+
+    final response = await request.send();
+    final responseData = await response.stream.bytesToString();
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(responseData);
+      return json['secure_url'];
+    } else {
+      print('Upload failed: $responseData');
+      return null;
+    }
+  }
+
   Future<void> _submitEvent() async {
     if (!_formKey.currentState!.validate() ||
         _pickedImage == null ||
@@ -100,29 +121,37 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       final user = FirebaseAuth.instance.currentUser!;
       final eventId = FirebaseFirestore.instance.collection('events').doc().id;
 
-      // ✅ Base64 encode the image
-      final imageBytes = await _pickedImage!.readAsBytes();
-      final base64Image = base64Encode(imageBytes);
+      // Upload to Cloudinary
+      final imageUrl = await uploadImageToCloudinary(_pickedImage!);
+      if (imageUrl == null) {
+        throw Exception("Image upload failed.");
+      }
 
-      await FirebaseFirestore.instance.collection('events').doc(eventId).set({
+      final eventData = {
         'id': eventId,
         'title': _titleController.text.trim(),
         'description': _descController.text.trim(),
         'location': _locationController.text.trim(),
-        'category': _selectedCategory, // make sure it's a String
+        'category': _selectedCategory,
         'date': Timestamp.fromDate(_selectedDate!),
-        'imageBase64': base64Image,
+        'imageUrl': imageUrl,
         'createdBy': user.uid,
         'organizerName': user.displayName ?? 'Organizer',
         'createdAt': Timestamp.now(),
-      });
+      };
+
+      await FirebaseFirestore.instance
+          .collection('events')
+          .doc(eventId)
+          .set(eventData);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(" Event created successfully.")),
+        const SnackBar(content: Text("Event created successfully.")),
       );
       Navigator.pop(context);
     } catch (e) {
+      print('🔥 Error uploading event: $e');
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("❌ Error: $e")));
@@ -159,7 +188,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-
               TextFormField(
                 controller: _titleController,
                 decoration: const InputDecoration(labelText: 'Event Title'),
@@ -167,7 +195,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     (val) => val == null || val.isEmpty ? 'Enter title' : null,
               ),
               const SizedBox(height: 12),
-
               TextFormField(
                 controller: _descController,
                 decoration: const InputDecoration(labelText: 'Description'),
@@ -177,7 +204,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         val == null || val.isEmpty ? 'Enter description' : null,
               ),
               const SizedBox(height: 12),
-
               TextFormField(
                 controller: _locationController,
                 decoration: const InputDecoration(labelText: 'Location'),
@@ -186,7 +212,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         val == null || val.isEmpty ? 'Enter location' : null,
               ),
               const SizedBox(height: 12),
-
               DropdownButtonFormField<String>(
                 value: _selectedCategory,
                 decoration: const InputDecoration(labelText: 'Category'),
@@ -201,9 +226,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   if (val != null) setState(() => _selectedCategory = val);
                 },
               ),
-
               const SizedBox(height: 12),
-
               ListTile(
                 title: Text(
                   _selectedDate != null
@@ -214,7 +237,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 onTap: _pickDateTime,
               ),
               const SizedBox(height: 24),
-
               _isLoading
                   ? const CircularProgressIndicator()
                   : ElevatedButton.icon(

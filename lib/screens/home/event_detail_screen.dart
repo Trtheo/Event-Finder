@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -27,12 +26,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final savedDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('saved_events')
-        .doc(widget.event['id'] ?? widget.event['title'])
-        .get();
+    final savedDoc =
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('saved_events')
+            .doc(widget.event['id'] ?? widget.event['title'])
+            .get();
 
     if (savedDoc.exists) {
       setState(() => _isSaved = true);
@@ -53,9 +53,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         .set(widget.event);
 
     setState(() => _isSaved = true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Event saved!")),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text("Event saved!")));
   }
 
   Future<void> _unsaveEvent() async {
@@ -72,9 +72,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         .delete();
 
     setState(() => _isSaved = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Bookmark removed.")),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text("Bookmark removed.")));
   }
 
   void _addToCalendar() {
@@ -95,23 +95,25 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final date = widget.event['date']?.toDate();
-    final formattedDate = date != null
-        ? DateFormat('EEE, MMM d • h:mm a').format(date)
-        : 'Date TBD';
+    final formattedDate =
+        date != null
+            ? DateFormat('EEE, MMM d • h:mm a').format(date)
+            : 'Date TBD';
 
-    final imageBase64 = widget.event['imageBase64'];
-    final imageWidget = imageBase64 != null
-        ? Image.memory(
-            base64Decode(imageBase64),
-            width: double.infinity,
-            height: 220,
-            fit: BoxFit.cover,
-          )
-        : Container(
-            height: 220,
-            color: Colors.grey[200],
-            child: const Center(child: Text("No Image")),
-          );
+    final imageUrl = widget.event['imageUrl'];
+    final imageWidget =
+        imageUrl != null
+            ? Image.network(
+              imageUrl,
+              width: double.infinity,
+              height: 220,
+              fit: BoxFit.cover,
+            )
+            : Container(
+              height: 220,
+              color: Colors.grey[200],
+              child: const Center(child: Text("No Image")),
+            );
 
     final now = DateTime.now();
     final isOngoing = date != null && now.isBefore(date);
@@ -161,7 +163,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     children: [
                       const Icon(Icons.person, size: 20),
                       const SizedBox(width: 6),
-                      Text("Organized by: ${widget.event['organizerName'] ?? 'Unknown'}"),
+                      Text(
+                        "Organized by: ${widget.event['organizerName'] ?? 'Unknown'}",
+                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -174,12 +178,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       ElevatedButton.icon(
-                        icon: Icon(_isSaved
-                            ? Icons.bookmark_remove
-                            : Icons.bookmark_add),
-                        label: Text(_isSaved
-                            ? "Remove Bookmark"
-                            : "Save Event"),
+                        icon: Icon(
+                          _isSaved ? Icons.bookmark_remove : Icons.bookmark_add,
+                        ),
+                        label: Text(
+                          _isSaved ? "Remove Bookmark" : "Save Event",
+                        ),
                         onPressed: _isSaved ? _unsaveEvent : _saveEvent,
                       ),
                       OutlinedButton.icon(

@@ -26,7 +26,7 @@ class _EventListScreenState extends State<EventListScreen> {
     'Art',
     'Health',
     'Party',
-    'BirthDay',
+    'Birthday',
     'Ceremony',
     'Wedding',
     'Festival',
@@ -152,9 +152,9 @@ class _EventListScreenState extends State<EventListScreen> {
 
                       child: ListTile(
                         leading:
-                            data['imageBase64'] != null
-                                ? Image.memory(
-                                  base64Decode(data['imageBase64']),
+                            data['imageUrl'] != null
+                                ? Image.network(
+                                  data['imageUrl'],
                                   width: 60,
                                   fit: BoxFit.cover,
                                 )
