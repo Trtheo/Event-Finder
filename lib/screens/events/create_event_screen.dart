@@ -8,7 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 class CreateEventScreen extends StatefulWidget {
-  final Map<String, dynamic>? eventToEdit; // 🆕 support editing
+  final Map<String, dynamic>? eventToEdit;
 
   const CreateEventScreen({super.key, this.eventToEdit});
 
@@ -21,11 +21,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
   final _locationController = TextEditingController();
+  final _latitudeController = TextEditingController();
+  final _longitudeController = TextEditingController();
 
   DateTime? _selectedDate;
   File? _pickedImage;
   bool _isLoading = false;
-  String? _imageUrl; // 🆕 for edit
+  String? _imageUrl;
 
   final List<String> _categories = [
     'Tech',
@@ -51,6 +53,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       _titleController.text = data['title'] ?? '';
       _descController.text = data['description'] ?? '';
       _locationController.text = data['location'] ?? '';
+      _latitudeController.text = data['latitude']?.toString() ?? '';
+      _longitudeController.text = data['longitude']?.toString() ?? '';
       _selectedCategory = data['category'] ?? 'Tech';
       _imageUrl = data['imageUrl'];
       _selectedDate = data['date']?.toDate();
@@ -136,17 +140,23 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               : FirebaseFirestore.instance.collection('events').doc().id;
 
       String? imageUrl = _imageUrl;
-
       if (_pickedImage != null) {
         imageUrl = await _uploadToCloudinary(_pickedImage!);
         if (imageUrl == null) throw Exception("Image upload failed");
       }
+
+      final double? latitude = double.tryParse(_latitudeController.text.trim());
+      final double? longitude = double.tryParse(
+        _longitudeController.text.trim(),
+      );
 
       final eventData = {
         'id': docId,
         'title': _titleController.text.trim(),
         'description': _descController.text.trim(),
         'location': _locationController.text.trim(),
+        'latitude': latitude,
+        'longitude': longitude,
         'category': _selectedCategory,
         'date': Timestamp.fromDate(_selectedDate!),
         'imageUrl': imageUrl,
@@ -163,12 +173,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(isEditing ? "✅ Event updated." : "🎉 Event created."),
+          content: Text(isEditing ? "Event updated." : "Event created."),
         ),
       );
       Navigator.pop(context);
     } catch (e) {
-      print("🔥 Submission error: $e");
+      print("🔥 Error: $e");
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("Error: $e")));
@@ -234,6 +244,26 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 validator:
                     (val) =>
                         val == null || val.isEmpty ? 'Enter location' : null,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _latitudeController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Latitude'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _longitudeController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Longitude'),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(

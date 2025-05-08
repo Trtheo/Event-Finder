@@ -12,27 +12,45 @@ class MyCreatedEventsScreen extends StatelessWidget {
   Future<void> _deleteEvent(BuildContext context, String eventId) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Delete Event"),
-        content: const Text("Are you sure you want to delete this event?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancel"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("Delete"),
-          ),
-        ],
-      ),
+      barrierDismissible: true, // allow tap outside to cancel
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Delete Event"),
+          content: const Text("Are you sure you want to delete this event?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text("Delete"),
+            ),
+          ],
+        );
+      },
     );
 
     if (confirm == true) {
-      await FirebaseFirestore.instance.collection('events').doc(eventId).delete();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Event deleted.")),
-      );
+      try {
+        await FirebaseFirestore.instance
+            .collection('events')
+            .doc(eventId)
+            .delete();
+
+        // show confirmation
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Event deleted successfully.")),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(" Failed to delete event: $e")));
+      }
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(" Deletion canceled.")));
     }
   }
 
@@ -57,9 +75,9 @@ class MyCreatedEventsScreen extends StatelessWidget {
                   onPressed: () async {
                     await Clipboard.setData(ClipboardData(text: link));
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Copied")),
-                    );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text("Copied")));
                   },
                 ),
                 OutlinedButton.icon(
@@ -95,14 +113,17 @@ class MyCreatedEventsScreen extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         stream: eventsRef.snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
+          if (snapshot.hasError)
+            return Center(child: Text("Error: ${snapshot.error}"));
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
           final docs = snapshot.data!.docs;
           if (docs.isEmpty) {
-            return const Center(child: Text("You haven’t created any events yet."));
+            return const Center(
+              child: Text("You haven’t created any events yet."),
+            );
           }
 
           return ListView.builder(
@@ -114,20 +135,26 @@ class MyCreatedEventsScreen extends StatelessWidget {
 
               return Card(
                 elevation: 2,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  leading: data['imageUrl'] != null
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            data['imageUrl'],
-                            width: 60,
-                            height: 60,
-                            fit: BoxFit.cover,
-                          ),
-                        )
-                      : const Icon(Icons.event, size: 40),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  leading:
+                      data['imageUrl'] != null
+                          ? ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              data['imageUrl'],
+                              width: 60,
+                              height: 60,
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                          : const Icon(Icons.event, size: 40),
                   title: Text(
                     data['title'] ?? '',
                     style: const TextStyle(fontWeight: FontWeight.bold),
@@ -139,7 +166,8 @@ class MyCreatedEventsScreen extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => CreateEventScreen(eventToEdit: data),
+                            builder:
+                                (_) => CreateEventScreen(eventToEdit: data),
                           ),
                         );
                       } else if (value == 'delete') {
@@ -148,11 +176,15 @@ class MyCreatedEventsScreen extends StatelessWidget {
                         _showShareModal(context, data['id']);
                       }
                     },
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(value: 'edit', child: Text('Edit')),
-                      PopupMenuItem(value: 'share', child: Text('Share / Copy')),
-                      PopupMenuItem(value: 'delete', child: Text('Delete')),
-                    ],
+                    itemBuilder:
+                        (context) => const [
+                          PopupMenuItem(value: 'edit', child: Text('Edit')),
+                          PopupMenuItem(
+                            value: 'share',
+                            child: Text('Share / Copy'),
+                          ),
+                          PopupMenuItem(value: 'delete', child: Text('Delete')),
+                        ],
                   ),
                   onTap: () {
                     Navigator.push(

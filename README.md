@@ -17,3 +17,4 @@ samples, guidance on mobile development, and a full API reference.
 
 
 ### Hosting URL: https://event-finder-fabd7.web.app
+## key=API_KEY= AIzaSyA6-rrYwEs6ESTViXj5h4VL-RhoFqk6sE0

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
-
 import 'screens/main_navigation.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
@@ -30,7 +29,7 @@ class EventFinderApp extends StatelessWidget {
             themeMode:
                 themeNotifier.isDarkMode ? ThemeMode.dark : ThemeMode.light,
 
-            // ✅ Dynamic Deep Link Handling
+            //  Dynamic Deep Link Handling
             onGenerateRoute: (settings) {
               final uri = Uri.parse(settings.name ?? '');
               if (uri.pathSegments.length == 2 &&
@@ -52,7 +51,7 @@ class EventFinderApp extends StatelessWidget {
               '/my-events': (context) => const MyCreatedEventsScreen(),
             },
 
-            // 👇 Default root screen with auth
+            //  Default root screen with auth
             home: StreamBuilder<User?>(
               stream: FirebaseAuth.instance.authStateChanges(),
               builder: (context, snapshot) {

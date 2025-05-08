@@ -3,6 +3,9 @@
         android:label="event_finder_fixed"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyA6-rrYwEs6ESTViXj5h4VL-RhoFqk6sE0"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -18,7 +21,7 @@
                  to determine the Window background behind the Flutter UI. -->
             <meta-data
               android:name="io.flutter.embedding.android.NormalTheme"
-              android:resource="@style/NormalTheme"
+              android:resource="@style/NormalTheme" 
               />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>

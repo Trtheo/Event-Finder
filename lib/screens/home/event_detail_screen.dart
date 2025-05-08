@@ -3,6 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:add_2_calendar/add_2_calendar.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 class EventDetailScreen extends StatefulWidget {
   final Map<String, dynamic> event;
@@ -15,6 +18,10 @@ class EventDetailScreen extends StatefulWidget {
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _isSaved = false;
+  GoogleMapController? _mapController;
+
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
 
   @override
   void initState() {
@@ -56,6 +63,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text("Event saved!")));
+
+    _scheduleNotification();
   }
 
   Future<void> _unsaveEvent() async {
@@ -92,6 +101,33 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     Add2Calendar.addEvent2Cal(calendarEvent);
   }
 
+  void _scheduleNotification() {
+    final eventTime = widget.event['date']?.toDate();
+    if (eventTime == null) return;
+
+    final scheduledTime = eventTime.subtract(const Duration(minutes: 30));
+
+    final id = widget.event['id'].hashCode;
+
+    flutterLocalNotificationsPlugin.zonedSchedule(
+      id,
+      'Upcoming Event',
+      '${widget.event['title']} starts in 30 minutes!',
+      tz.TZDateTime.from(scheduledTime, tz.local),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'event_reminder_channel',
+          'Event Reminders',
+          importance: Importance.max,
+          priority: Priority.high,
+        ),
+      ),
+      androidAllowWhileIdle: true,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final date = widget.event['date']?.toDate();
@@ -117,6 +153,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
     final now = DateTime.now();
     final isOngoing = date != null && now.isBefore(date);
+
+    final double? lat = widget.event['latitude'];
+    final double? lng = widget.event['longitude'];
+
+    final LatLng? eventLocation =
+        (lat != null && lng != null) ? LatLng(lat, lng) : null;
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.event['title'] ?? 'Event Details')),
@@ -193,6 +235,41 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 24),
+                  if (eventLocation != null)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Location Map",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          height: 220,
+                          child: GoogleMap(
+                            initialCameraPosition: CameraPosition(
+                              target: eventLocation,
+                              zoom: 14,
+                            ),
+                            markers: {
+                              Marker(
+                                markerId: const MarkerId("event_location"),
+                                position: eventLocation,
+                                infoWindow: InfoWindow(
+                                  title: widget.event['title'],
+                                  snippet: widget.event['location'],
+                                ),
+                              ),
+                            },
+                            onMapCreated:
+                                (controller) => _mapController = controller,
+                            myLocationEnabled: false,
+                            zoomControlsEnabled: false,
+                          ),
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ),
