@@ -18,66 +18,101 @@ class EventDetailScreen extends StatefulWidget {
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _isSaved = false;
+  bool _isAttending = false;
   GoogleMapController? _mapController;
 
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+  final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
   @override
   void initState() {
     super.initState();
-    _checkIfSaved();
+    _checkSavedStatus();
+    _checkAttendanceStatus();
   }
 
-  Future<void> _checkIfSaved() async {
+  Future<void> _checkSavedStatus() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final savedDoc =
+    final doc =
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .collection('saved_events')
-            .doc(widget.event['id'] ?? widget.event['title'])
+            .doc(widget.event['id'])
             .get();
 
-    if (savedDoc.exists) {
-      setState(() => _isSaved = true);
-    }
+    setState(() => _isSaved = doc.exists);
+  }
+
+  Future<void> _checkAttendanceStatus() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final doc =
+        await FirebaseFirestore.instance
+            .collection('events')
+            .doc(widget.event['id'])
+            .collection('attendees')
+            .doc(user.uid)
+            .get();
+
+    setState(() => _isAttending = doc.exists);
   }
 
   Future<void> _saveEvent() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final eventId = widget.event['id'] ?? widget.event['title'];
-
     await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
         .collection('saved_events')
-        .doc(eventId)
+        .doc(widget.event['id'])
         .set(widget.event);
 
     setState(() => _isSaved = true);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("Event saved!")));
 
-    _scheduleNotification();
+    final date = widget.event['date']?.toDate();
+    if (date != null) {
+      final time = date.subtract(const Duration(minutes: 30));
+      final id = widget.event['id'].hashCode;
+
+      _flutterLocalNotificationsPlugin.zonedSchedule(
+        id,
+        'Upcoming Event',
+        '${widget.event['title']} starts in 30 minutes!',
+        tz.TZDateTime.from(time, tz.local),
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'event_reminder_channel',
+            'Event Reminders',
+            channelDescription: '30 minutes before event start',
+            importance: Importance.max,
+            priority: Priority.high,
+          ),
+        ),
+        androidAllowWhileIdle: true,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Event saved & reminder set.")),
+    );
   }
 
   Future<void> _unsaveEvent() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final eventId = widget.event['id'] ?? widget.event['title'];
-
     await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
         .collection('saved_events')
-        .doc(eventId)
+        .doc(widget.event['id'])
         .delete();
 
     setState(() => _isSaved = false);
@@ -91,7 +126,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     if (date == null) return;
 
     final calendarEvent = Event(
-      title: widget.event['title'] ?? 'Event',
+      title: widget.event['title'],
       description: widget.event['description'] ?? '',
       location: widget.event['location'] ?? '',
       startDate: date,
@@ -101,31 +136,33 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     Add2Calendar.addEvent2Cal(calendarEvent);
   }
 
-  void _scheduleNotification() {
-    final eventTime = widget.event['date']?.toDate();
-    if (eventTime == null) return;
+  Future<void> _attendEvent() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-    final scheduledTime = eventTime.subtract(const Duration(minutes: 30));
+    final docRef = FirebaseFirestore.instance
+        .collection('events')
+        .doc(widget.event['id'])
+        .collection('attendees')
+        .doc(user.uid);
 
-    final id = widget.event['id'].hashCode;
-
-    flutterLocalNotificationsPlugin.zonedSchedule(
-      id,
-      'Upcoming Event',
-      '${widget.event['title']} starts in 30 minutes!',
-      tz.TZDateTime.from(scheduledTime, tz.local),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'event_reminder_channel',
-          'Event Reminders',
-          importance: Importance.max,
-          priority: Priority.high,
-        ),
-      ),
-      androidAllowWhileIdle: true,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-    );
+    if (_isAttending) {
+      await docRef.delete();
+      setState(() => _isAttending = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("You are no longer attending.")),
+      );
+    } else {
+      await docRef.set({
+        'userId': user.uid,
+        'displayName': user.displayName ?? 'User',
+        'timestamp': Timestamp.now(),
+      });
+      setState(() => _isAttending = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("You're attending this event.")),
+      );
+    }
   }
 
   @override
@@ -151,14 +188,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               child: const Center(child: Text("No Image")),
             );
 
-    final now = DateTime.now();
-    final isOngoing = date != null && now.isBefore(date);
+    final isOngoing = date != null && DateTime.now().isBefore(date);
 
-    final double? lat = widget.event['latitude'];
-    final double? lng = widget.event['longitude'];
-
-    final LatLng? eventLocation =
-        (lat != null && lng != null) ? LatLng(lat, lng) : null;
+    final lat = widget.event['latitude'];
+    final lng = widget.event['longitude'];
+    final eventLatLng = (lat != null && lng != null) ? LatLng(lat, lng) : null;
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.event['title'] ?? 'Event Details')),
@@ -168,12 +202,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           children: [
             imageWidget,
             Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    widget.event['title'] ?? 'No Title',
+                    widget.event['title'] ?? '',
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 8),
@@ -205,17 +239,17 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     children: [
                       const Icon(Icons.person, size: 20),
                       const SizedBox(width: 6),
-                      Text(
-                        "Organized by: ${widget.event['organizerName'] ?? 'Unknown'}",
-                      ),
+                      Text("Organized by: ${widget.event['organizerName']}"),
                     ],
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    widget.event['description'] ?? 'No description available.',
+                    widget.event['description'] ?? '',
                     style: const TextStyle(fontSize: 16),
                   ),
                   const SizedBox(height: 24),
+
+                  // 🔘 Action Buttons
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
@@ -235,41 +269,47 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
-                  if (eventLocation != null)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          "Location Map",
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          height: 220,
-                          child: GoogleMap(
-                            initialCameraPosition: CameraPosition(
-                              target: eventLocation,
-                              zoom: 14,
-                            ),
-                            markers: {
-                              Marker(
-                                markerId: const MarkerId("event_location"),
-                                position: eventLocation,
-                                infoWindow: InfoWindow(
-                                  title: widget.event['title'],
-                                  snippet: widget.event['location'],
-                                ),
-                              ),
-                            },
-                            onMapCreated:
-                                (controller) => _mapController = controller,
-                            myLocationEnabled: false,
-                            zoomControlsEnabled: false,
-                          ),
-                        ),
-                      ],
+                  const SizedBox(height: 12),
+                  Center(
+                    child: ElevatedButton.icon(
+                      icon: Icon(
+                        _isAttending ? Icons.cancel : Icons.check_circle,
+                      ),
+                      label: Text(
+                        _isAttending ? "Cancel Attendance" : "Attend",
+                      ),
+                      onPressed: _attendEvent,
                     ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  if (eventLatLng != null) ...[
+                    const Text(
+                      "Location Map",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 220,
+                      child: GoogleMap(
+                        initialCameraPosition: CameraPosition(
+                          target: eventLatLng,
+                          zoom: 14,
+                        ),
+                        markers: {
+                          Marker(
+                            markerId: const MarkerId('event_location'),
+                            position: eventLatLng,
+                          ),
+                        },
+                        onMapCreated:
+                            (controller) => _mapController = controller,
+                        myLocationEnabled: false,
+                        zoomControlsEnabled: false,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
