@@ -112,3 +112,119 @@ EventDetailScreen (map, RSVP, calendar)
 
 ### Cloudinary Integration
 Images are uploaded to Cloudinary via `http.MultipartRequest.` Update your `upload_preset` and `cloud_name` in `create_event_screen.dart`.
+
+# =============================================================
+
+**1. Push Notifications**
+Type: Local & Firebase Push Notifications (FCM)
+
+Usage:
+
+Local Notifications (via flutter_local_notifications):
+
+Triggered when the user saves an event.
+
+Notifies them 30 minutes before and 30 minutes before the event ends.
+
+Scheduled using Dart code inside event_detail_screen.dart.
+
+Firebase Cloud Messaging (FCM) (backend push):
+
+Will notify:
+
+Event creator when someone RSVPs.
+
+All users when a new event is published.
+
+Attendees 10 minutes before the event starts.
+
+These are sent from Firebase Cloud Functions using backend triggers.
+
+**2. Firebase**
+Services Used: Firestore + FirebaseAuth + FCM
+
+Usage:
+
+Authentication:
+
+Users log in and register using FirebaseAuth.
+
+After login, their uid is used across the app.
+
+Firestore Database:
+
+Stores all events, saved events, attendees, and notifications.
+
+Data structure:
+
+
+events/{eventId}
+users/{userId}/saved_events
+users/{userId}/notifications
+events/{eventId}/attendees
+FCM Tokens:
+
+Each logged-in user's FCM token is saved to Firestore.
+
+This allows push messages to be sent to specific users from the backend.
+
+ **3. State Management**
+Approach: setState() and Firebase Stream-based reactive UI
+
+Usage:
+
+The app does not use heavy state managers like Provider or GetX.
+
+Instead, it uses:
+
+setState() for UI updates (e.g., when saving, attending).
+
+StreamBuilder to listen to Firestore updates in real-time (like for NotificationsScreen).
+
+Keeps it simple and effective for a mid-size app.
+
+**4. Local Storage**
+Purpose: Support offline access
+
+Usage:
+
+Events are cached locally using SQLite when online.
+
+If there's no internet connection, the app automatically shows events from local storage.
+
+This is managed by checking connection status using connectivity_plus.
+
+**5. SQLite**
+Tool: sqflite package
+Purpose: Offline caching for event listing and saved events
+
+Usage:
+
+Whenever events are fetched from Firestore, they are also saved locally using DatabaseHelper.
+
+Structure:
+
+```bash
+CREATE TABLE events (
+  id TEXT PRIMARY KEY,
+  title TEXT,
+  description TEXT,
+  ...
+)
+```
+This makes the app usable even without internet — a major UX benefit.
+
+**6. Navigation**
+Tool: Flutter's built-in Navigator (Navigator.push, MaterialPageRoute)
+
+Usage:
+
+Navigates between screens like:
+
+Event list → Event details
+
+Profile → Create/Edit event
+
+Home → Saved/Notifications/Profile tabs
+
+Clean transitions are managed with standard Flutter navigation patterns.

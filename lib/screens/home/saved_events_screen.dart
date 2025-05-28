@@ -1,72 +1,180 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import '../../db/database_helper.dart';
+import '../../models/local_event_model.dart';
 import 'event_detail_screen.dart';
 
-class SavedEventsScreen extends StatelessWidget {
+class SavedEventsScreen extends StatefulWidget {
   const SavedEventsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return const Center(child: Text("Not logged in"));
+  State<SavedEventsScreen> createState() => _SavedEventsScreenState();
+}
 
-    final savedRef = FirebaseFirestore.instance
+class _SavedEventsScreenState extends State<SavedEventsScreen> {
+  final _dbHelper = DatabaseHelper();
+  bool _isOnline = true;
+  List<LocalEvent> _events = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _checkConnectivity();
+    _loadEvents();
+  }
+
+  Future<void> _checkConnectivity() async {
+    final result = await Connectivity().checkConnectivity();
+    setState(() => _isOnline = result != ConnectivityResult.none);
+  }
+
+  Future<void> _loadEvents() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    if (_isOnline) {
+      final snapshot =
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('saved_events')
+              // 🔁 Removed .orderBy('date') to prevent Timestamp vs String issue
+              .get();
+
+      final events =
+          snapshot.docs.map((doc) {
+            final data = doc.data();
+            return LocalEvent.fromMap({...data, 'id': doc.id});
+          }).toList();
+
+      setState(() => _events = events);
+
+      for (var event in events) {
+        await _dbHelper.insertOrUpdateEvent(event);
+      }
+    } else {
+      final localData = await _dbHelper.getEvents();
+      setState(() => _events = localData);
+    }
+  }
+
+  Future<void> _unsaveEvent(LocalEvent event) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    // Remove from Firestore
+    await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
         .collection('saved_events')
-        .orderBy('date');
+        .doc(event.id)
+        .delete();
 
+    // Remove from local SQLite
+    await _dbHelper.deleteEvent(event.id);
+
+    // Update UI
+    setState(() {
+      _events.removeWhere((e) => e.id == event.id);
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Event removed from saved list")),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Saved Events")),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: savedRef.snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: Text("Error: ${snapshot.error}"));
-          }
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body:
+          _events.isEmpty
+              ? const Center(child: Text("You haven't saved any events yet."))
+              : RefreshIndicator(
+                onRefresh: _loadEvents,
+                child: ListView.builder(
+                  itemCount: _events.length,
+                  itemBuilder: (context, index) {
+                    final event = _events[index];
 
-          final docs = snapshot.data!.docs;
+                    return Card(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      elevation: 3,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(12),
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: Image.network(
+                            event.imageUrl,
+                            width: 60,
+                            height: 60,
+                            fit: BoxFit.cover,
+                            errorBuilder:
+                                (_, __, ___) =>
+                                    const Icon(Icons.image_not_supported),
+                          ),
+                        ),
+                        title: Text(
+                          event.title,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(event.location),
+                        trailing: IconButton(
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            color: Colors.red,
+                          ),
+                          tooltip: 'Remove from saved',
+                          onPressed: () async {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder:
+                                  (context) => AlertDialog(
+                                    title: const Text("Unsave Event"),
+                                    content: const Text(
+                                      "Are you sure you want to remove this event from saved list?",
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        child: const Text("Cancel"),
+                                        onPressed:
+                                            () => Navigator.pop(context, false),
+                                      ),
+                                      ElevatedButton(
+                                        child: const Text("Remove"),
+                                        onPressed:
+                                            () => Navigator.pop(context, true),
+                                      ),
+                                    ],
+                                  ),
+                            );
 
-          if (docs.isEmpty) {
-            return const Center(child: Text("You haven't saved any events yet."));
-          }
-
-          return ListView.builder(
-            itemCount: docs.length,
-            itemBuilder: (context, index) {
-              final data = docs[index].data() as Map<String, dynamic>;
-              data['id'] = docs[index].id;
-
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: ListTile(
-                  leading: Image.network(
-                    data['imageUrl'] ?? '',
-                    width: 60,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.image),
-                  ),
-                  title: Text(data['title'] ?? ''),
-                  subtitle: Text(data['location'] ?? ''),
-                  trailing: const Icon(Icons.arrow_forward_ios),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => EventDetailScreen(event: data),
+                            if (confirm == true) {
+                              await _unsaveEvent(event);
+                            }
+                          },
+                        ),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => EventDetailScreen(event: event),
+                            ),
+                          );
+                        }
                       ),
                     );
                   },
                 ),
-              );
-            },
-          );
-        },
-      ),
+              ),
     );
   }
 }

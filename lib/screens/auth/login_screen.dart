@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -32,12 +34,31 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => isLoading = true);
     try {
-      await _auth.signInWithEmailAndPassword(email: email, password: password);
+      final UserCredential userCred = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      // ✅ Get and store FCM token
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null) {
+        print("📲 [Login] FCM Token: $token");
+
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userCred.user!.uid)
+            .set({'fcmToken': token}, SetOptions(merge: true));
+      }
+
       Navigator.pushReplacementNamed(context, '/main');
     } on FirebaseAuthException catch (e) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(e.message ?? 'Login failed')));
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Something went wrong: $e')));
     } finally {
       setState(() => isLoading = false);
     }
@@ -67,7 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const Text("Login to continue", style: TextStyle(fontSize: 16)),
                 const SizedBox(height: 30),
 
-                // Email
+                // Email Field
                 TextField(
                   controller: emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -79,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Password
+                // Password Field
                 TextField(
                   controller: passwordController,
                   obscureText: isObscure,
@@ -97,7 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // Updated Login Button (Styled like Register)
+                // Login Button
                 isLoading
                     ? const CircularProgressIndicator()
                     : SizedBox(
@@ -125,11 +146,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                   child: const Text(
                     "Don't have an account? Register",
-
                     style: TextStyle(decoration: TextDecoration.underline),
                   ),
                 ),
-
                 TextButton(
                   onPressed: () {
                     Navigator.pushNamed(context, '/reset-password');

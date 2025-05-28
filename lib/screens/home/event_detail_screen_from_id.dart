@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../models/local_event_model.dart';
 import 'event_detail_screen.dart';
 
 class EventDetailScreenFromId extends StatelessWidget {
@@ -21,9 +22,7 @@ class EventDetailScreenFromId extends StatelessWidget {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError ||
-              !snapshot.hasData ||
-              !snapshot.data!.exists) {
+          if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
             return const Center(
               child: Text("❌ Event not found or failed to load."),
             );
@@ -32,7 +31,14 @@ class EventDetailScreenFromId extends StatelessWidget {
           final data = snapshot.data!.data() as Map<String, dynamic>;
           data['id'] = eventId;
 
-          return EventDetailScreen(event: data);
+          try {
+            final event = LocalEvent.fromMap(data);
+            return EventDetailScreen(event: event);
+          } catch (e) {
+            return const Center(
+              child: Text("⚠️ Error parsing event data."),
+            );
+          }
         },
       ),
     );

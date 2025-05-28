@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:add_2_calendar/add_2_calendar.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
+import '../../models/local_event_model.dart';
 
 class EventDetailScreen extends StatefulWidget {
-  final Map<String, dynamic> event;
+  final LocalEvent event;
 
   const EventDetailScreen({super.key, required this.event});
 
@@ -35,13 +35,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final doc =
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('saved_events')
-            .doc(widget.event['id'])
-            .get();
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('saved_events')
+        .doc(widget.event.id)
+        .get();
 
     setState(() => _isSaved = doc.exists);
   }
@@ -50,13 +49,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final doc =
-        await FirebaseFirestore.instance
-            .collection('events')
-            .doc(widget.event['id'])
-            .collection('attendees')
-            .doc(user.uid)
-            .get();
+    final doc = await FirebaseFirestore.instance
+        .collection('events')
+        .doc(widget.event.id)
+        .collection('attendees')
+        .doc(user.uid)
+        .get();
 
     setState(() => _isAttending = doc.exists);
   }
@@ -69,38 +67,59 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         .collection('users')
         .doc(user.uid)
         .collection('saved_events')
-        .doc(widget.event['id'])
-        .set(widget.event);
+        .doc(widget.event.id)
+        .set(widget.event.toMap());
 
     setState(() => _isSaved = true);
 
-    final date = widget.event['date']?.toDate();
-    if (date != null) {
-      final time = date.subtract(const Duration(minutes: 30));
-      final id = widget.event['id'].hashCode;
+    final startTime = widget.event.date;
+    final endTime = startTime.add(const Duration(hours: 2));
+    final notifyBeforeStart = startTime.subtract(const Duration(minutes: 30));
+    final notifyBeforeEnd = endTime.subtract(const Duration(minutes: 30));
 
-      _flutterLocalNotificationsPlugin.zonedSchedule(
-        id,
-        'Upcoming Event',
-        '${widget.event['title']} starts in 30 minutes!',
-        tz.TZDateTime.from(time, tz.local),
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'event_reminder_channel',
-            'Event Reminders',
-            channelDescription: '30 minutes before event start',
-            importance: Importance.max,
-            priority: Priority.high,
-          ),
+    final startNotificationId = widget.event.id.hashCode;
+    final endNotificationId = (widget.event.id + "_end").hashCode;
+
+    await _flutterLocalNotificationsPlugin.zonedSchedule(
+      startNotificationId,
+      'Upcoming Event',
+      '${widget.event.title} starts in 30 minutes!',
+      tz.TZDateTime.from(notifyBeforeStart, tz.local),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'event_start_channel',
+          'Event Start',
+          channelDescription: '30 minutes before event starts',
+          importance: Importance.max,
+          priority: Priority.high,
         ),
-        androidAllowWhileIdle: true,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-      );
-    }
+      ),
+      androidAllowWhileIdle: true,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+    );
+
+    await _flutterLocalNotificationsPlugin.zonedSchedule(
+      endNotificationId,
+      'Event Ending Soon',
+      '${widget.event.title} ends in 30 minutes!',
+      tz.TZDateTime.from(notifyBeforeEnd, tz.local),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'event_end_channel',
+          'Event End',
+          channelDescription: '30 minutes before event ends',
+          importance: Importance.max,
+          priority: Priority.high,
+        ),
+      ),
+      androidAllowWhileIdle: true,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+    );
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Event saved & reminder set.")),
+      const SnackBar(content: Text("Event saved & notifications scheduled.")),
     );
   }
 
@@ -112,28 +131,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         .collection('users')
         .doc(user.uid)
         .collection('saved_events')
-        .doc(widget.event['id'])
+        .doc(widget.event.id)
         .delete();
 
     setState(() => _isSaved = false);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("Bookmark removed.")));
-  }
-
-  void _addToCalendar() {
-    final date = widget.event['date']?.toDate();
-    if (date == null) return;
-
-    final calendarEvent = Event(
-      title: widget.event['title'],
-      description: widget.event['description'] ?? '',
-      location: widget.event['location'] ?? '',
-      startDate: date,
-      endDate: date.add(const Duration(hours: 2)),
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Bookmark removed.")),
     );
-
-    Add2Calendar.addEvent2Cal(calendarEvent);
   }
 
   Future<void> _attendEvent() async {
@@ -142,7 +146,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
     final docRef = FirebaseFirestore.instance
         .collection('events')
-        .doc(widget.event['id'])
+        .doc(widget.event.id)
         .collection('attendees')
         .doc(user.uid);
 
@@ -167,49 +171,40 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final date = widget.event['date']?.toDate();
+    final date = widget.event.date;
     final formattedDate =
-        date != null
-            ? DateFormat('EEE, MMM d • h:mm a').format(date)
-            : 'Date TBD';
-
-    final imageUrl = widget.event['imageUrl'];
-    final imageWidget =
-        imageUrl != null
-            ? Image.network(
-              imageUrl,
-              width: double.infinity,
-              height: 220,
-              fit: BoxFit.cover,
-            )
-            : Container(
-              height: 220,
-              color: Colors.grey[200],
-              child: const Center(child: Text("No Image")),
-            );
-
-    final isOngoing = date != null && DateTime.now().isBefore(date);
-
-    final lat = widget.event['latitude'];
-    final lng = widget.event['longitude'];
-    final eventLatLng = (lat != null && lng != null) ? LatLng(lat, lng) : null;
+        DateFormat('EEE, MMM d • h:mm a').format(date);
+    final isOngoing = DateTime.now().isBefore(date);
+    final eventLatLng = (widget.event.toMap().containsKey('latitude') &&
+            widget.event.toMap().containsKey('longitude'))
+        ? LatLng(widget.event.toMap()['latitude'], widget.event.toMap()['longitude'])
+        : null;
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.event['title'] ?? 'Event Details')),
+      appBar: AppBar(title: Text(widget.event.title)),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            imageWidget,
+            widget.event.imageUrl.isNotEmpty
+                ? Image.network(
+                    widget.event.imageUrl,
+                    width: double.infinity,
+                    height: 220,
+                    fit: BoxFit.cover,
+                  )
+                : Container(
+                    height: 220,
+                    color: Colors.grey[200],
+                    child: const Center(child: Text("No Image")),
+                  ),
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    widget.event['title'] ?? '',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
+                  Text(widget.event.title,
+                      style: Theme.of(context).textTheme.headlineSmall),
                   const SizedBox(height: 8),
                   Text(
                     isOngoing ? "🟢 Ongoing" : "🔴 Ended",
@@ -223,7 +218,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     children: [
                       const Icon(Icons.place, size: 20),
                       const SizedBox(width: 6),
-                      Text(widget.event['location'] ?? 'No location'),
+                      Text(widget.event.location),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -239,17 +234,15 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     children: [
                       const Icon(Icons.person, size: 20),
                       const SizedBox(width: 6),
-                      Text("Organized by: ${widget.event['organizerName']}"),
+                      Text("Organized by: ${widget.event.organizerName}"),
                     ],
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    widget.event['description'] ?? '',
+                    widget.event.description,
                     style: const TextStyle(fontSize: 16),
                   ),
                   const SizedBox(height: 24),
-
-                  // 🔘 Action Buttons
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
@@ -262,28 +255,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         ),
                         onPressed: _isSaved ? _unsaveEvent : _saveEvent,
                       ),
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.calendar_today),
-                        label: const Text("Add to Calendar"),
-                        onPressed: _addToCalendar,
+                      ElevatedButton.icon(
+                        icon: Icon(
+                          _isAttending ? Icons.cancel : Icons.check_circle,
+                        ),
+                        label: Text(
+                          _isAttending ? "Cancel Attendance" : "Attend",
+                        ),
+                        onPressed: _attendEvent,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  Center(
-                    child: ElevatedButton.icon(
-                      icon: Icon(
-                        _isAttending ? Icons.cancel : Icons.check_circle,
-                      ),
-                      label: Text(
-                        _isAttending ? "Cancel Attendance" : "Attend",
-                      ),
-                      onPressed: _attendEvent,
-                    ),
-                  ),
-
                   const SizedBox(height: 24),
-
                   if (eventLatLng != null) ...[
                     const Text(
                       "Location Map",
@@ -303,8 +286,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             position: eventLatLng,
                           ),
                         },
-                        onMapCreated:
-                            (controller) => _mapController = controller,
+                        onMapCreated: (controller) =>
+                            _mapController = controller,
                         myLocationEnabled: false,
                         zoomControlsEnabled: false,
                       ),

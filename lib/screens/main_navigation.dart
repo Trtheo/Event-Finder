@@ -36,7 +36,6 @@ class _MainNavigationState extends State<MainNavigation>
     super.initState();
     _loadLastTab();
 
-    // Redirect to login if not authenticated
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       Future.microtask(() {
@@ -58,7 +57,6 @@ class _MainNavigationState extends State<MainNavigation>
 
     final user = FirebaseAuth.instance.currentUser;
     if (index == 2 && user != null) {
-      // When notifications tab is tapped → mark all as read
       final unread = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -77,7 +75,6 @@ class _MainNavigationState extends State<MainNavigation>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-
     return Scaffold(
       body: PageStorage(
         bucket: _bucket,
@@ -94,6 +91,8 @@ class _MainNavigationState extends State<MainNavigation>
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return const SizedBox.shrink();
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     final unreadStream = FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
@@ -106,55 +105,81 @@ class _MainNavigationState extends State<MainNavigation>
       builder: (context, snapshot) {
         int unreadCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
 
+        final navIcons = [
+          Icon(Icons.home,
+              size: 30,
+              color: _index == 0
+                  ? Colors.white
+                  : isDark
+                      ? Colors.blue
+                      : Colors.black),
+          Icon(Icons.bookmark,
+              size: 30,
+              color: _index == 1
+                  ? Colors.white
+                  : isDark
+                      ? Colors.blue
+                      : Colors.black),
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(Icons.notifications,
+                  size: 30,
+                  color: _index == 2
+                      ? Colors.white
+                      : isDark
+                          ? Colors.blue
+                          : Colors.black),
+              if (unreadCount > 0)
+                Positioned(
+                  top: 5,
+                  right: 5,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    transitionBuilder: (child, animation) => ScaleTransition(
+                      scale: animation,
+                      child: child,
+                    ),
+                    child: Container(
+                      key: ValueKey(unreadCount),
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints:
+                          const BoxConstraints(minWidth: 18, minHeight: 18),
+                      child: Text(
+                        unreadCount > 9 ? '9+' : '$unreadCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          Icon(Icons.person,
+              size: 30,
+              color: _index == 3
+                  ? Colors.white
+                  : isDark
+                      ? Colors.blue
+                      : Colors.black),
+        ];
+
         return CurvedNavigationBar(
           index: _index,
           height: 60,
           backgroundColor: Colors.transparent,
           color: Theme.of(context).primaryColor,
-          buttonBackgroundColor: Colors.white,
+          buttonBackgroundColor: Theme.of(context).primaryColor,
           animationDuration: const Duration(milliseconds: 300),
           onTap: _handleTabChange,
-          items: [
-            const Icon(Icons.home, size: 30, color: Colors.black),
-            const Icon(Icons.bookmark, size: 30, color: Colors.black),
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                const Icon(Icons.notifications, size: 30, color: Colors.black),
-                if (unreadCount > 0)
-                  Positioned(
-                    top: 5,
-                    right: 5,
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 300),
-                      transitionBuilder: (child, animation) => ScaleTransition(
-                        scale: animation,
-                        child: child,
-                      ),
-                      child: Container(
-                        key: ValueKey(unreadCount),
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                        constraints:
-                            const BoxConstraints(minWidth: 18, minHeight: 18),
-                        child: Text(
-                          unreadCount > 9 ? '9+' : '$unreadCount',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const Icon(Icons.person, size: 30, color: Colors.black),
-          ],
+          items: navIcons,
         );
       },
     );

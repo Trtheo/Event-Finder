@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -66,6 +67,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         base64Image = base64Encode(imageBytes);
       }
 
+      // ✅ Get FCM token
+      String? fcmToken = await FirebaseMessaging.instance.getToken();
+      print("📲 [Register] FCM Token: $fcmToken");
+
+      // ✅ Save user info to Firestore
       await FirebaseFirestore.instance
           .collection('users')
           .doc(userCred.user!.uid)
@@ -73,9 +79,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
             'displayName': name,
             'email': email,
             'photoBase64': base64Image,
+            'fcmToken': fcmToken,
             'createdAt': Timestamp.now(),
           });
 
+      // ✅ Update display name in Firebase Auth
       await userCred.user!.updateDisplayName(name);
 
       if (!mounted) return;

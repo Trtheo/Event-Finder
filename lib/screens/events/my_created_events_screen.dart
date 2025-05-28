@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../models/local_event_model.dart';
 import '../home/event_detail_screen.dart';
 import 'create_event_screen.dart';
 
@@ -12,23 +13,22 @@ class MyCreatedEventsScreen extends StatelessWidget {
   Future<void> _deleteEvent(BuildContext context, String eventId) async {
     final confirm = await showDialog<bool>(
       context: context,
-      barrierDismissible: true, // allow tap outside to cancel
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("Delete Event"),
-          content: const Text("Are you sure you want to delete this event?"),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text("Cancel"),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text("Delete"),
-            ),
-          ],
-        );
-      },
+      barrierDismissible: true,
+      builder:
+          (context) => AlertDialog(
+            title: const Text("Delete Event"),
+            content: const Text("Are you sure you want to delete this event?"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text("Cancel"),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text("Delete"),
+              ),
+            ],
+          ),
     );
 
     if (confirm == true) {
@@ -38,19 +38,18 @@ class MyCreatedEventsScreen extends StatelessWidget {
             .doc(eventId)
             .delete();
 
-        // show confirmation
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Event deleted successfully.")),
         );
       } catch (e) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(" Failed to delete event: $e")));
+        ).showSnackBar(SnackBar(content: Text("Failed to delete event: $e")));
       }
     } else {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text(" Deletion canceled.")));
+      ).showSnackBar(const SnackBar(content: Text("Deletion canceled.")));
     }
   }
 
@@ -59,40 +58,39 @@ class MyCreatedEventsScreen extends StatelessWidget {
 
     showDialog(
       context: context,
-      builder: (context) {
-        return GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: AlertDialog(
-            title: const Text("Share Event"),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SelectableText(link),
-                const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.copy),
-                  label: const Text("Copy Link"),
-                  onPressed: () async {
-                    await Clipboard.setData(ClipboardData(text: link));
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(const SnackBar(content: Text("Copied")));
-                  },
-                ),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.share),
-                  label: const Text("Share"),
-                  onPressed: () {
-                    Share.share("Check out my event: $link");
-                    Navigator.pop(context);
-                  },
-                ),
-              ],
+      builder:
+          (context) => GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: AlertDialog(
+              title: const Text("Share Event"),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SelectableText(link),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.copy),
+                    label: const Text("Copy Link"),
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: link));
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(const SnackBar(content: Text("Copied")));
+                    },
+                  ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.share),
+                    label: const Text("Share"),
+                    onPressed: () {
+                      Share.share("Check out my event: $link");
+                      Navigator.pop(context);
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
-        );
-      },
     );
   }
 
@@ -113,8 +111,9 @@ class MyCreatedEventsScreen extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         stream: eventsRef.snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.hasError)
+          if (snapshot.hasError) {
             return Center(child: Text("Error: ${snapshot.error}"));
+          }
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -132,6 +131,7 @@ class MyCreatedEventsScreen extends StatelessWidget {
             itemBuilder: (context, index) {
               final data = docs[index].data() as Map<String, dynamic>;
               data['id'] = docs[index].id;
+              final event = LocalEvent.fromMap(data);
 
               return Card(
                 elevation: 2,
@@ -144,22 +144,25 @@ class MyCreatedEventsScreen extends StatelessWidget {
                     vertical: 10,
                   ),
                   leading:
-                      data['imageUrl'] != null
+                      event.imageUrl.isNotEmpty
                           ? ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: Image.network(
-                              data['imageUrl'],
+                              event.imageUrl,
                               width: 60,
                               height: 60,
                               fit: BoxFit.cover,
+                              errorBuilder:
+                                  (_, __, ___) =>
+                                      const Icon(Icons.image_not_supported),
                             ),
                           )
                           : const Icon(Icons.event, size: 40),
                   title: Text(
-                    data['title'] ?? '',
+                    event.title,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  subtitle: Text(data['location'] ?? ''),
+                  subtitle: Text(event.location),
                   trailing: PopupMenuButton<String>(
                     onSelected: (value) {
                       if (value == 'edit') {
@@ -167,13 +170,15 @@ class MyCreatedEventsScreen extends StatelessWidget {
                           context,
                           MaterialPageRoute(
                             builder:
-                                (_) => CreateEventScreen(eventToEdit: data),
+                                (_) => CreateEventScreen(
+                                  eventToEdit: event.toMap(),
+                                ),
                           ),
                         );
                       } else if (value == 'delete') {
-                        _deleteEvent(context, data['id']);
+                        _deleteEvent(context, event.id);
                       } else if (value == 'share') {
-                        _showShareModal(context, data['id']);
+                        _showShareModal(context, event.id);
                       }
                     },
                     itemBuilder:
@@ -190,7 +195,7 @@ class MyCreatedEventsScreen extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => EventDetailScreen(event: data),
+                        builder: (_) => EventDetailScreen(event: event),
                       ),
                     );
                   },
